@@ -136,6 +136,18 @@ An equation: $e^{i\pi} -1 = 0$
 part2_q2 = r"""
 **Your answer:**
 
+Yes.
+The cross entropy loss calculation uses the scores of the outputs of the model which resembels: distance between ground truths and the predicted score, and
+the accuracy of the models measured by if the result is true / false. With those definitions what might happen is getting wrong predictions while having "big distance"
+which will result in getting an increased test loss, or having a correct prediction but with a low score.
+
+For example, taking binary classification task (results are 0,1):
+    a. if a sample should be classified with 1,and it gets a right prediction but with class score a little bit over 50, the prediction will be correct so the accuracy 
+        will be increased, but from the other side, this is a low score which its distance is big w.r.t to 1 which will contribute for increasing the loss.
+    b. if a sample should be classified with 0,and it gets a right prediction but with class score a little smaller than 50, the prediction will be correct so the accuracy 
+        will be increased, but from the other side, this is a low score which its distance is big w.r.t to 0 which will contribute for increasing the loss.
+    having a lot of samples that behves like a + b will result in increasing test loss while the test accuracy getting increased.
+
 
 Write your answer using **markdown** and $\LaTeX$:
 ```python
@@ -148,6 +160,39 @@ An equation: $e^{i\pi} -1 = 0$
 
 part2_q3 = r"""
 **Your answer:**
+
+
+
+1. Backpropagation algorithm is used for calculating the gradient of a loss function with respect to variables( wights/inputs) to update the inputs, and its calculated
+after each step (hidden layer) while Gradient Descent is the algorithm that tries to minimize the loss function of the model and reach its minimum and its calculated
+at the output of the model.
+
+
+2. 
+    a. In training error: gradient descent sums the error for each point in a training set, updating the model only after all training examples have been evaluated,
+        while SGD picks up a single ( or some algo picks ranomly subgroup of samples < training) sample (randomly) and runs a training epoch for each example within
+        the dataset and it updates each training example's parameters one at a time.
+
+    b. from memory utilization, GD consumes more memory than SGD as it needs to hold all the dataset in memory.
+    
+    c. SGD may result in losses in computational efficiency when compared to batch gradient descent - SGD computationally's a whole lot faster
+        (as there's single/subgroup sample/s each time )
+    
+    d. SGD works well (Not well, I suppose, but better than batch gradient descent) for error manifolds that have lots of local maxima/minima. In this case, the somewhat
+        noisier gradient calculated using the reduced number of samples tends to jerk the model out of local minima into a region that hopefully is more optimal. 
+        Single samples are really noisy, while minibatches tend to average a little of the noise out. Thus, the amount of jerk is reduced when using minibatches.
+        A good balance is struck when the minibatch size is small enough to avoid some of the poor local minima, but large enough that it doesn't avoid the global
+        minima or better-performing local minima. (Incidently, this assumes that the best minima have a larger and deeper basin of attraction, and are therefore easier to fall into.)
+
+
+3. As mentioned in two: Memory utilization, performance of the model (SGD is faster), avoiding local minimas while reaching the global minima.
+Especially SGD might be more compatible to use when having large datasets which we will feel its memory & performance benifits.
+
+4. A. No, This does not produce a gradient equivalent to GD. the GD's steps and gradient updates differ according to the size of the batch
+Thus it does matter whether the loss is calculated on the dataset in batches or whole as N in the following formula will be different.
+
+B. After each batch, we are storing the loss in the memory, when recieving out of memory that means there's no enough space to store all the losses after number of batches,
+this could resulted by that the splitted batches are not small enough.
 
 
 Write your answer using **markdown** and $\LaTeX$:
