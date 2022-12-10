@@ -388,7 +388,13 @@ class Dropout(Layer):
         #  Notice that contrary to previous layers, this layer behaves
         #  differently a according to the current training_mode (train/test).
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        out = x
+        self.grad_cache["x"] = x
+
+        if self.training_mode:
+            neuron_sel = (torch.Tensor(x.shape).uniform_(0, 1) > self.p).float()
+            self.grad_cache["not_dropped"] = neuron_sel
+            out = torch.mul(neuron_sel, x) * (1.0 / (1 - self.p))
         # ========================
 
         return out
@@ -396,7 +402,12 @@ class Dropout(Layer):
     def backward(self, dout):
         # TODO: Implement the dropout backward pass.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        
+        if self.training_mode:
+            neuron_sel = self.grad_cache["not_dropped"]
+            dout = torch.mul(neuron_sel, dout) * (1.0 / (1 - self.p))
+        
+        dx = dout
         # ========================
 
         return dx
@@ -522,6 +533,8 @@ class MLP(Layer):
                     layers.append(ReLU())
                 else:
                     layers.append(Sigmoid())
+                if dropout > 0:
+                    layers.append(Dropout(dropout))
                 
         # ========================
 

@@ -115,13 +115,29 @@ def part2_dropout_hp():
     # TODO: Tweak the hyperparameters to get the model to overfit without
     # dropout.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    wstd, lr, = (
+        0.001,
+        0.00025,
+    )
     # ========================
     return dict(wstd=wstd, lr=lr)
 
 
 part2_q1 = r"""
 **Your answer:**
+1. The graphs are as expected.
+In with-droput graphs we are seeing lower accuracy in train-acc which its expected as the dropout must vanish
+the over-fitting behaviour that appears in no-dropout graph which suffers from  generalization error 
+- this is what the regularization dropout offers.
+
+2. the model behaviour with dropout=0.4 is better than with dropout=0.8.
+As the test loss is the minimum and train acc dropped to be lower than 100% while still better than when having dropout=0.8 .
+ 
+The regularization of dropout with dropout=0.4 prevent overfitting as it tries to filter some of the information
+in train time and it keeps most of it which keeps the balance of taking the benfit of training,
+not as but with dropout=0.8 as in train time it causes to lose most of the information which lead to underfit
+as we can see in the graphs so it leads to the lower test-acc and train-acc.
+
 
 
 Write your answer using **markdown** and $\LaTeX$:
