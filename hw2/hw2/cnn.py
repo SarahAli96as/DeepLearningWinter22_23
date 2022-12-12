@@ -210,14 +210,54 @@ class ResidualBlock(nn.Module):
         #  - Don't create layers which you don't use! This will prevent
         #    correct comparison in the test.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        main_layers = []
+
+        all_channels = [in_channels, *channels]
+        activation_func = ACTIVATIONS[activation_type](**activation_params)
+
+        for ch_idx in range(len(all_channels)-1):
+            conv_layer = nn.Conv2d(
+                in_channels = all_channels[ch_idx],
+                out_channels = all_channels[ch_idx+1],
+                kernel_size = kernel_sizes[ch_idx],
+                padding = kernel_sizes[ch_idx] // 2,
+                bias = True )
+
+            main_layers.append(conv_layer ) #used padding to preserve the spatial extent of the input;
+            if ch_idx != len(all_channels)-2:
+                if dropout > 0:
+                    main_layers.append(torch.nn.Dropout2d(dropout))
+                
+                if batchnorm == True:
+                    batch_norm_layer = torch.nn.BatchNorm2d(all_channels[ch_idx+1])
+                    main_layers.append(batch_norm_layer)
+
+                main_layers.append(activation_func)
+
+        self.main_path = nn.Sequential(*main_layers)
+
+        shortcut_layers = []
+        
+        if in_channels != channels[-1]:
+            shortcut_layer = nn.Conv2d(
+                in_channels = in_channels,
+                out_channels = channels[-1],
+                kernel_size = (1, 1),
+                bias = False,
+                )
+        else:
+            shortcut_layer = torch.nn.Identity()
+        
+        shortcut_layers.append(shortcut_layer)
+        self.shortcut_path = nn.Sequential(*shortcut_layers)
         # ========================
 
     def forward(self, x: Tensor):
         # TODO: Implement the forward pass. Save the main and residual path to `out`.
         out: Tensor = None
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        
+        out = torch.relu(self.main_path(x) + self.shortcut_path(x))
         # ========================
         out = torch.relu(out)
         return out
@@ -257,7 +297,13 @@ class ResidualBottleneckBlock(ResidualBlock):
         #  Initialize the base class in the right way to produce the bottleneck block
         #  architecture.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        all_channels = [inner_channels[0], *inner_channels, in_out_channels] #make sure !!
+        kernel_sizes = [1, *inner_kernel_sizes, 1]
+        super().__init__(
+            in_channels = in_out_channels,
+            channels = all_channels,
+            kernel_sizes = kernel_sizes,
+            **kwargs)
         # ========================
 
 
@@ -303,7 +349,52 @@ class ResNet(CNN):
         #  - Use bottleneck blocks if requested and if the number of input and output
         #    channels match for each group of P convolutions.
         # ====== YOUR CODE: ======
-        raise NotImplementedError()
+        
+        all_channels = [in_channels, *self.channels]
+        pool_func = POOLINGS[self.pooling_type](**self.pooling_params)
+        groups_num = len(self.channels) // self.pool_every
+        
+        for i in range(groups_num):
+            if all_channels[i * self.pool_every] != all_channels[self.pool_every*(i + 1)] or not self.bottleneck:
+                layers.append(ResidualBlock(all_channels[i * self.pool_every], 
+                                         all_channels[i * self.pool_every + 1 : (i + 1) * self.pool_every + 1], 
+                                         kernel_sizes = [3] * self.pool_every,
+                                         batchnorm = self.batchnorm,
+                                         dropout = self.dropout,
+                                         activation_type = self.activation_type,
+                                         activation_params = self.activation_params))
+            else:
+                layers.append(ResidualBottleneckBlock(
+                                         in_out_channels = int(all_channels[i * self.pool_every]), 
+                                         inner_channels = all_channels[i * self.pool_every + 2 : (i + 1) * self.pool_every], 
+                                         inner_kernel_sizes = [3] * (self.pool_every - 2),
+                                         batchnorm = self.batchnorm,
+                                         dropout = self.dropout,
+                                         activation_type = self.activation_type,
+                                         activation_params = self.activation_params))
+                    
+            layers.append(pool_func)
+        
+        r = len(self.channels) % self.pool_every
+        if r > 0: # channels remaining..
+            if all_channels[-r - 1] != all_channels[-1] or not self.bottleneck:
+                layers.append(ResidualBlock(all_channels[-r - 1],
+                                     all_channels[-r:], 
+                                     kernel_sizes = [3] * r,
+                                     batchnorm = self.batchnorm,
+                                     dropout = self.dropout,
+                                     activation_type = self.activation_type,
+                                     activation_params = self.activation_params))
+            else: 
+                layers.append(ResidualBottleneckBlock(
+                                     in_out_channels = int(all_channels[-r - 1]), 
+                                     inner_channels = all_channels[-r:-1], 
+                                     inner_kernel_sizes = [3] * (self.pool_every - 2),
+                                     batchnorm = self.batchnorm,
+                                     dropout = self.dropout,
+                                     activation_type = self.activation_type,
+                                     activation_params = self.activation_params))
+
         # ========================
         seq = nn.Sequential(*layers)
         return seq
