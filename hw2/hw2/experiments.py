@@ -45,7 +45,40 @@ def mlp_experiment(
     #  Note: use print_every=0, verbose=False, plot=False where relevant to prevent
     #  output from this function.
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+
+        
+    model = BinaryClassifier(
+        model= MLP(
+            in_dim=len(dl_train.dataset.tensors[0][0]),
+            dims=[*[width]*depth, 2],
+            nonlins=[*['tanh', ]*depth, 'softmax'] 
+        ),
+        threshold=0.5,
+    )
+    
+    ## Custom paramters
+    lr = 0.3
+    weight_decay = 0
+    loss_fn = torch.nn.CrossEntropyLoss()
+    momentum = 0.7
+    
+    ## Aggregate into dict
+    custom_parameters = dict(lr=lr, weight_decay=weight_decay, momentum=momentum)
+    
+    
+    optimizer = torch.optim.SGD(params=model.parameters(), **custom_parameters)
+    trainer = ClassifierTrainer(model, loss_fn, optimizer)
+
+    fit_result = trainer.fit(dl_train, dl_valid, num_epochs=n_epochs, print_every=0);
+    
+    thresh = select_roc_thresh(model, *dl_valid.dataset.tensors, plot=False)
+    
+    valid_acc = fit_result.test_acc[-1]
+    
+    trainer.model.threshold = thresh 
+    
+    test_acc = trainer.test_epoch(dl_test, verbose = False).accuracy
+    
     # ========================
     return model, thresh, valid_acc, test_acc
 
@@ -107,7 +140,104 @@ def cnn_experiment(
     #   for you automatically.
     fit_res = None
     # ====== YOUR CODE: ======
-    raise NotImplementedError()
+    # ------------------------------------
+    # --------- Model Definition ---------
+    # ------------------------------------
+    ## Majd: Will try to use a model as close as possible to ResNet50 based on https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py
+    ## Default conv layers have kernel=3 with pad=1 to preserve size.
+    ## In ResNet50, pooling is done only at the end before the FC layers - Need to validate this and try different values. Avg Pool was used with 4 kernel size for (3, 64, 64) input image. Will use 2 kernel size since out input is (3,32,32).
+    x0, _ = ds_train[0]
+    in_size = list(x0.shape)
+    out_classes = len(ds_train.classes)
+    
+    ## Define Channels
+    channels = [val for val in filters_per_layer for _ in range(layers_per_block)]
+    pool_every = len(channels)
+    
+    ## Parse **kw for common Resnet/CNN parameters
+    res_cnn_parameters = {}
+    
+    if 'conv_params' in kw:
+        res_cnn_parameters['conv_params']= kw['conv_params']
+    else:
+        res_cnn_parameters['conv_params']= {'kernel_size': 3, 'padding': 1, 'stride': 1}
+        
+    if 'activation_type' in kw:
+        res_cnn_parameters['activation_type']= kw['activation_type']
+        
+    if 'activation_params' in kw:
+        res_cnn_parameters['activation_params']= kw['activation_params']
+        
+    if 'pooling_type' in kw:
+        res_cnn_parameters['pooling_type']= kw['pooling_type']
+    else:
+        res_cnn_parameters['pooling_type']= 'avg'
+        
+    if 'pooling_params' in kw:
+        res_cnn_parameters['pooling_params']= kw['pooling_params']
+    else:
+        res_cnn_parameters['pooling_params']= {'kernel_size': 2}
+        
+    ## Parse **kw for Resnet-only parameters
+    res_only_parameters = {}
+    
+    if 'batchnorm' in kw:
+        res_only_parameters['batchnorm']= kw['batchnorm']
+    else:
+        res_only_parameters['batchnorm']= True
+    if 'dropout' in kw:
+        res_only_parameters['dropout']= kw['dropout']
+    if 'bottleneck' in kw:
+        res_only_parameters['bottleneck']= kw['bottleneck']
+    else:
+        res_only_parameters['bottleneck']= True
+    
+    
+    
+    if model_cls is CNN:
+        model = ArgMaxClassifier(model_cls(in_size=in_size, out_classes=out_classes,
+        channels=channels, pool_every=pool_every, hidden_dims=hidden_dims, **res_cnn_parameters))
+    else:
+        model = ArgMaxClassifier(model_cls(in_size=in_size, out_classes=out_classes,
+        channels=channels, pool_every=pool_every, hidden_dims=hidden_dims, **res_cnn_parameters, **res_only_parameters))  
+    
+    # --------------------------------
+    # --------- Data Loaders ---------
+    # --------------------------------
+    train_size = batches * bs_train
+    dl_train = torch.utils.data.DataLoader(ds_train, bs_train,
+                                       sampler=torch.utils.data.SubsetRandomSampler(range(0,train_size)))
+    print(f'Train size is: {train_size}')
+    
+    
+    test_size = min(batches * bs_test, 6000)
+    print(f'Test size is: {test_size}')
+    
+    dl_test = torch.utils.data.DataLoader(ds_test, bs_test,
+                                       sampler=torch.utils.data.SubsetRandomSampler(range(0,test_size)))
+       
+    # -----------------------------------------------
+    # --------- Optimizer and Loss Function ---------
+    # -----------------------------------------------
+    ## CrossEntropy Loss function 
+    loss_fn = torch.nn.CrossEntropyLoss()
+    
+    ## Optimizer Parameters
+    optimizer_parameters = dict(lr=lr, weight_decay = reg)
+        
+    if 'momentum' in kw:
+        optimizer_parameters['momentum']= kw['momentum']
+    else: 
+        optimizer_parameters['momentum']= 0.9
+    
+    optimizer = torch.optim.SGD(params=model.parameters(), **optimizer_parameters)
+    
+    # ----------------------------
+    # --------- Training ---------
+    # ----------------------------  
+    trainer = ClassifierTrainer(model, loss_fn, optimizer, device = device)
+
+    fit_res = trainer.fit(dl_train, dl_test, num_epochs=epochs, print_every=0, checkpoints=checkpoints, early_stopping=early_stopping)
     # ========================
 
     save_experiment(run_name, out_dir, cfg, fit_res)

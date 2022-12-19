@@ -80,7 +80,10 @@ class CNN(nn.Module):
         #  Note: If N is not divisible by P, then N mod P additional
         #  CONV->ACTs should exist at the end, without a POOL after them.
         # ====== YOUR CODE: ======
+        if not self.pooling_params:
+            self.pooling_params = dict(kernel_size= 3, padding= 1)
 
+        
         for channel_idx in range(len(self.channels)):
             #conv
             if channel_idx == 0:
@@ -259,7 +262,7 @@ class ResidualBlock(nn.Module):
         
         out = torch.relu(self.main_path(x) + self.shortcut_path(x))
         # ========================
-        out = torch.relu(out)
+
         return out
 
 
@@ -349,47 +352,63 @@ class ResNet(CNN):
         #  - Use bottleneck blocks if requested and if the number of input and output
         #    channels match for each group of P convolutions.
         # ====== YOUR CODE: ======
-        
+        if not self.pooling_params:
+            self.pooling_params = dict(kernel_size= 3, padding= 1)
+            
+            
         all_channels = [in_channels, *self.channels]
-        pool_func = POOLINGS[self.pooling_type](**self.pooling_params)
-        groups_num = len(self.channels) // self.pool_every
+        pool = POOLINGS[self.pooling_type](**self.pooling_params)
+        conv_groups_max_num = int(len(self.channels) / self.pool_every)
         
-        for i in range(groups_num):
-            if all_channels[i * self.pool_every] != all_channels[self.pool_every*(i + 1)] or not self.bottleneck:
-                layers.append(ResidualBlock(all_channels[i * self.pool_every], 
-                                         all_channels[i * self.pool_every + 1 : (i + 1) * self.pool_every + 1], 
-                                         kernel_sizes = [3] * self.pool_every,
+        for i in range(conv_groups_max_num):
+            in_channel_conv = all_channels[i * self.pool_every]
+            in_channels_conv_next_grp = all_channels[(i+1) * self.pool_every]
+            is_bottlneck = not self.bottleneck
+            
+            if in_channel_conv != in_channels_conv_next_grp or is_bottlneck:
+                kernel_sizes = [3] * self.pool_every
+                layers.append(ResidualBlock(
+                                         in_channels = in_channel_conv,
+                                         channels = all_channels[i * self.pool_every + 1 : (i + 1) * self.pool_every + 1],
+                                         kernel_sizes = kernel_sizes,
                                          batchnorm = self.batchnorm,
                                          dropout = self.dropout,
                                          activation_type = self.activation_type,
                                          activation_params = self.activation_params))
             else:
+                inner_kernel_sizes = [3] * (self.pool_every - 2)
                 layers.append(ResidualBottleneckBlock(
-                                         in_out_channels = int(all_channels[i * self.pool_every]), 
+                                         in_out_channels = in_channel_conv, 
                                          inner_channels = all_channels[i * self.pool_every + 2 : (i + 1) * self.pool_every], 
-                                         inner_kernel_sizes = [3] * (self.pool_every - 2),
+                                         inner_kernel_sizes = inner_kernel_sizes,
                                          batchnorm = self.batchnorm,
                                          dropout = self.dropout,
                                          activation_type = self.activation_type,
                                          activation_params = self.activation_params))
                     
-            layers.append(pool_func)
+            layers.append(pool)
         
-        r = len(self.channels) % self.pool_every
-        if r > 0: # channels remaining..
-            if all_channels[-r - 1] != all_channels[-1] or not self.bottleneck:
-                layers.append(ResidualBlock(all_channels[-r - 1],
-                                     all_channels[-r:], 
-                                     kernel_sizes = [3] * r,
+        other_chan = len(self.channels) % self.pool_every
+        if other_chan > 0: # channels remaining..
+            if all_channels[-other_chan - 1] != all_channels[-1] or not self.bottleneck:
+                in_channels = all_channels[-other_chan - 1]
+                layers.append(ResidualBlock(
+                                     in_channels = in_channels,
+                                     channels = all_channels[-other_chan:], 
+                                     kernel_sizes = [3] * other_chan,
                                      batchnorm = self.batchnorm,
                                      dropout = self.dropout,
                                      activation_type = self.activation_type,
                                      activation_params = self.activation_params))
-            else: 
+            else:
+                in_out_channels = int(all_channels[-other_chan - 1])
+                inner_channels = all_channels[-other_chan:-1]
+                inner_kernel_sizes = [3] * (self.pool_every - 2)
+
                 layers.append(ResidualBottleneckBlock(
-                                     in_out_channels = int(all_channels[-r - 1]), 
-                                     inner_channels = all_channels[-r:-1], 
-                                     inner_kernel_sizes = [3] * (self.pool_every - 2),
+                                     in_out_channels = in_out_channels,
+                                     inner_channels = inner_channels,
+                                     inner_kernel_sizes = inner_kernel_sizes,
                                      batchnorm = self.batchnorm,
                                      dropout = self.dropout,
                                      activation_type = self.activation_type,

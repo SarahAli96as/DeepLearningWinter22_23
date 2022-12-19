@@ -43,7 +43,7 @@ class MLP(nn.Module):
             Can be either a sequence of strings which are keys in the ACTIVATIONS
             dict, or instances of nn.Module (e.g. an instance of nn.ReLU()).
             Length should match 'dims'.
-        """ 
+        """
         assert len(nonlins) == len(dims)
         self.in_dim = in_dim
         self.out_dim = dims[-1]
@@ -55,16 +55,32 @@ class MLP(nn.Module):
         #  - Either instantiate the activations based on their name or use the provided
         #    instances.
         # ====== YOUR CODE: ======
+        ##From Tutorial 3
         super().__init__()
-        self.dims = dims
-        active_funcs = [ACTIVATIONS[active_func]() if active_func in ACTIVATIONS else active_func for active_func in nonlins]
-
+        
+        all_dims = [self.in_dim, *dims] ##Output dimension already includes in hidden
         layers = []
-        for active_func, d_in, d_out in zip(active_funcs, [self.in_dim] + dims[:],dims[:]):
-            layers.append(nn.Linear(d_in,d_out))
-            layers.append(active_func)
+        
+        for index, (input_dim, output_dim) in enumerate(zip(all_dims[:-1], all_dims[1:])):
             
-        self.layer = nn.Sequential(*layers)
+            if nonlins[index] in ACTIVATIONS:
+                nonlin = ACTIVATIONS[nonlins[index]](**ACTIVATION_DEFAULT_KWARGS[nonlins[index]])
+                
+            else:
+                nonlin = nonlins[index]
+
+             
+                
+            layers += [
+                nn.Linear(input_dim, output_dim, bias=True),
+                nonlin
+            ]
+            
+            
+        # Sequential is a container for layers
+        self.fc_layers = nn.Sequential(*layers[:])
+            
+        
         # ========================
 
     def forward(self, x: Tensor) -> Tensor:
@@ -75,6 +91,8 @@ class MLP(nn.Module):
         # TODO: Implement the model's forward pass. Make sure the input and output
         #  shapes are as expected.
         # ====== YOUR CODE: ======
-        x_com_dims = torch.reshape(x,(x.shape[0],self.in_dim))
-        return self.layer(x_com_dims)
+        x = torch.reshape(x,(x.shape[0],self.in_dim))
+        y_pred = self.fc_layers(x)
+        y_pred = torch.reshape(y_pred, (-1, self.out_dim))
+        return y_pred
         # ========================

@@ -87,11 +87,11 @@ class Trainer(abc.ABC):
                 if epochs_without_improvement == early_stopping:
                     break
             actual_num_epochs += 1
-            epoch_train = self.train_epoch(dl_train, **kw)
+            epoch_train = self.train_epoch(dl_train, verbose=False, **kw)
             train_acc.append(epoch_train.accuracy)
             train_loss.append(sum(epoch_train.losses) / len(epoch_train.losses))
 
-            test_result = self.test_epoch(dl_test, **kw)
+            test_result = self.test_epoch(dl_test, verbose=False, **kw)
             test_acc.append(test_result.accuracy)
             test_loss.append(sum(test_result.losses) / len(test_result.losses))
 
@@ -280,15 +280,20 @@ class ClassifierTrainer(Trainer):
         #  - Update parameters
         #  - Classify and calculate number of correct predictions
         # ====== YOUR CODE: ======
-
-        self.optimizer.zero_grad()
-        y_scores = self.model(X)
-        loss = self.loss_fn(y_scores, y)
-        loss.backward()        
-        self.optimizer.step()
-
+        # Forward Pass
+        y_pred = self.model(X)
+        
+        # Compute loss
+        loss = self.loss_fn(y_pred, y)
+        
+        # Backward pass
+        self.optimizer.zero_grad() # Zero gradients of all parameters
+        loss.backward()       # Run backprop algorithms to calculate gradients
+        
+        # Optimization step
+        self.optimizer.step()      # Use gradients to update model parameters
+        
         batch_loss, num_correct = self.test_batch(batch)
-
         # ========================
 
         return BatchResult(batch_loss, num_correct)
@@ -308,11 +313,13 @@ class ClassifierTrainer(Trainer):
             #  - Forward pass
             #  - Calculate number of correct predictions
             # ====== YOUR CODE: ======
-            y_scores = self.model(X)
-            batch_loss = self.loss_fn(y_scores, y)
+            y_pred = self.model(X)
+            y_pred_classified = self.model._classify(y_pred)
 
-            y_pred = torch.argmax(y_scores, dim=1)
-            num_correct = torch.sum(y_pred == y).item()
+                                                    
+            loss = self.loss_fn(y_pred, y)
+            batch_loss = loss.item()
+            num_correct = torch.sum(y == self.model._classify(y_pred)).item()
             # ========================
 
         return BatchResult(batch_loss, num_correct)
